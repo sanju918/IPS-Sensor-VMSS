@@ -1,0 +1,132 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vmSku": {
+            "defaultValue": "Standard_F4s",
+            "type": "String",
+            "metadata": {
+                "description": "Size of IPS sensors in the VM Scale Set."
+            }
+        },
+        "vmssName": {
+            "defaultValue": "mcafee-vnsp-vmss",
+            "maxLength": 22,
+            "type": "String",
+            "metadata": {
+                "description": "Globally unique dns name for the scale set. Must be 3-61 characters in length and globally unique across Azure."
+            }
+        },
+        "instanceCount": {
+            "defaultValue": 2,
+            "maxValue": 100,
+            "type": "Int",
+            "metadata": {
+                "description": "Number of IPS sensor instances (100 or less)."
+            }
+        },
+        "adminUsername": {
+            "defaultValue": "vnsp",
+            "type": "String",
+            "metadata": {
+                "description": "Admin username on all IPS sensors"
+            }
+        },
+        "adminPassword": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "Admin password on all IPS sensors"
+            }
+        },
+        "customData": {
+            "type": "String",
+            "metadata": {
+                "description": "User-data for IPS sensor"
+            }
+        },
+        "existingVnetResourceGroupName": {
+            "type": "String",
+            "metadata": {
+                "description": "Name of the resourceGroup for the existing virtual network to deploy the scale set into."
+            }
+        },
+        "existingVnetName": {
+            "type": "String",
+            "metadata": {
+                "description": "vName of the existing virtual network to deploy the scale set into."
+            }
+        },
+        "existingSubnetName": {
+            "type": "String",
+            "metadata": {
+                "description": "Name of the existing subnet to deploy the scale set into."
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Compute/virtualMachineScaleSets",
+            "apiVersion": "2017-03-30",
+            "name": "[parameters('vmssName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "[parameters('vmSku')]",
+                "capacity": "[parameters('instanceCount')]"
+            },
+            "plan": {
+                "name": "mcafee-vnsp-azure-ips-sensor-byol",
+                "publisher": "mfe_azure",
+                "product": "mcafee_vnsp_for_azure"
+            },
+            "properties": {
+                "overprovision": "true",
+                "upgradePolicy": {
+                    "mode": "Manual"
+                },
+                "virtualMachineProfile": {
+                    "storageProfile": {
+                        "osDisk": {
+                            "createOption": "FromImage",
+                            "managedDisk": {
+                                "storageAccountType": "Premium_LRS"
+                            }
+                        },
+                        "imageReference": {
+                            "publisher": "mfe_azure",
+                            "offer": "mcafee_vnsp_for_azure",
+                            "sku": "mcafee-vnsp-azure-ips-sensor-byol",
+                            "version": "latest"
+                        },
+                        "dataDisks": []
+                    },
+                    "osProfile": {
+                        "computerNamePrefix": "[parameters('vmssName')]",
+                        "adminUsername": "[parameters('adminUsername')]",
+                        "adminPassword": "[parameters('adminPassword')]",
+                        "customData": "[base64(parameters('customData'))]"
+                    },
+                    "networkProfile": {
+                        "networkInterfaceConfigurations": [
+                            {
+                                "name": "nic",
+                                "properties": {
+                                    "primary": true,
+                                    "ipConfigurations": [
+                                        {
+                                            "name": "ipconfig",
+                                            "properties": {
+                                                "subnet": {
+                                                    "id": "[resourceId(parameters('existingVnetResourceGroupName'), 'Microsoft.Network/virtualNetworks/subnets', parameters('existingVnetName'), parameters('existingSubNetName'))]"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}
